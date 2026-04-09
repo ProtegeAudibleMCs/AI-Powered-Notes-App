@@ -8,7 +8,10 @@ const { createClient } = require('@supabase/supabase-js');
 dotenv.config();
 
 const app = express();
-app.use(cors());
+// This allows your specific frontend to talk to your backend
+app.use(cors({
+  origin: '*' // In production, you can replace '*' with your actual frontend URL for better security
+}));
 app.use(express.json());
 
 // 2. Initialize Clients
