@@ -2,9 +2,13 @@ import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import * as pdfjs from 'pdfjs-dist'
 
-// Configure PDF worker
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.entry'
-pdfjs.GlobalWorkerOptions.workerSrc = pdfWorker
+/** * VITE NATIVE WORKER CONFIG
+ * This tells Vite to treat the worker as a separate asset.
+ * If you get a 'Module not found' error, check your node_modules/pdfjs-dist/build 
+ * to see if the file is named pdf.worker.js or pdf.worker.mjs
+ */
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url'
+pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 const supabase = createClient(
@@ -79,11 +83,9 @@ function App() {
 
       // 1. Process files: Read content AND upload to storage
       for (const file of attachments) {
-        // Extract text for the AI
         const text = await extractTextFromFile(file);
         allFilesContent += text;
 
-        // Upload to Supabase Storage
         const fileExt = file.name.split('.').pop();
         const fileName = `${Math.random()}.${fileExt}`;
         const filePath = `${Date.now()}-${fileName}`;
@@ -100,7 +102,7 @@ function App() {
 
       if (insertError) throw insertError;
       
-      // 3. Trigger AI Synthesis with RAW content of files
+      // 3. Trigger AI Synthesis
       const response = await fetch(`${API_BASE}/api/summarize`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
