@@ -65,17 +65,23 @@ function App() {
       const newNoteId = data[0].id;
 
       // 2. Change your fetch URL to use API_BASE
-      const response = await fetch(`${API_BASE}/api/summarize`, { 
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          content: content, 
-          noteId: newNoteId 
-        }),
-      });
+    const response = await fetch(`${API_BASE}/api/summarize`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ content, noteId: newNoteId }),
+});
 
-      const aiData = await response.json();
-      setSummary(aiData.summary);
+// ADD THIS LOGGING
+console.log("Response Status:", response.status);
+const text = await response.text(); // Get raw text first
+console.log("Raw Response:", text);
+
+if (!response.ok) {
+  throw new Error(`Server status ${response.status}: ${text}`);
+}
+
+const aiData = JSON.parse(text); // Manually parse since we know it's not empty
+setSummary(aiData.summary);
 
     } catch (err) {
       console.error(err);
