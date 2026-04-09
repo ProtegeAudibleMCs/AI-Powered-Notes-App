@@ -79,8 +79,5 @@ app.post('/api/summarize', async (req, res) => {
 });
 
 // 4. Start Server
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
-    console.log(`✅ Using Groq with Llama 3.3`);
-});
+const port = process.env.PORT || 10000;
+app.listen(port, '0.0.0.0', () => console.log(`Listening on ${port}`));;

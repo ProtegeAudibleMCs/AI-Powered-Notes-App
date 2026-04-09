@@ -29,7 +29,7 @@ function App() {
       const newNoteId = data[0].id; // Here is your automatic ID!
 
       // STEP 2: Send to your Node.js backend for AI magic
-      const response = await fetch('http://localhost:5000/api/summarize', {
+     const response = await fetch('/api/summarize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
