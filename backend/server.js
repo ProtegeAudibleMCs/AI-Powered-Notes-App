@@ -10,7 +10,7 @@ dotenv.config();
 const app = express();
 // This allows your specific frontend to talk to your backend
 app.use(cors({
-  origin: '*' // In production, you can replace '*' with your actual frontend URL for better security
+  origin: 'https://ai-powered-notes-app.onrender.com' // In production, you can replace '*' with your actual frontend URL for better security
 }));
 app.use(express.json());
 
