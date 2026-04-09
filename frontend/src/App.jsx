@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
 
+// At the top of App.jsx, after your imports
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 // Initialize Supabase (Use your actual URL and Key here)
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
@@ -47,7 +50,43 @@ function App() {
     } finally {
       setLoading(false);
     }
+    const handleSaveAndSummarize = async () => {
+    if (!content) return alert("Write something first!");
+
+    setLoading(true);
+    try {
+      const { data, error: insertError } = await supabase
+        .from('notes')
+        .insert([{ content: content }])
+        .select();
+
+      if (insertError) throw insertError;
+      
+      const newNoteId = data[0].id;
+
+      // 2. Change your fetch URL to use API_BASE
+      const response = await fetch(`${API_BASE}/api/summarize`, { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          content: content, 
+          noteId: newNoteId 
+        }),
+      });
+
+      const aiData = await response.json();
+      setSummary(aiData.summary);
+
+    } catch (err) {
+      console.error(err);
+      alert("Error: " + err.message);
+    } finally {
+      setLoading(false);
+    }
   };
+  };
+
+  
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-6">
