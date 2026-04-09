@@ -3,7 +3,8 @@ import { createClient } from '@supabase/supabase-js'
 import * as pdfjs from 'pdfjs-dist'
 
 // Configure PDF worker
-pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.entry'
+pdfjs.GlobalWorkerOptions.workerSrc = pdfWorker
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 const supabase = createClient(
