@@ -46,16 +46,36 @@ function App() {
     if (!content && attachments.length === 0) return;
     setLoading(true);
     setSelectedNote(null);
+    
     try {
-      const attachmentNames = attachments.map(f => f.name);
-      
+      const uploadedPaths = [];
+
+      // 1. Upload files to Supabase Storage Bucket ('archives')
+      for (const file of attachments) {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Math.random()}.${fileExt}`;
+        const filePath = `${Date.now()}-${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('archives')
+          .upload(filePath, file);
+
+        if (uploadError) throw uploadError;
+        uploadedPaths.push(filePath);
+      }
+
+      // 2. Insert record into Database
       const { data, error: insertError } = await supabase
         .from('notes')
-        .insert([{ content, attachments: attachmentNames }])
+        .insert([{ 
+          content, 
+          attachments: uploadedPaths // Saving the actual storage paths
+        }])
         .select();
 
       if (insertError) throw insertError;
       
+      // 3. Trigger AI Synthesis
       const response = await fetch(`${API_BASE}/api/summarize`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -66,6 +86,8 @@ function App() {
 
       const aiData = await response.json();
       setSummary(aiData.summary);
+      
+      // Reset State
       setContent(''); 
       setAttachments([]);
       fetchHistory();
@@ -190,7 +212,10 @@ function App() {
 
               {summary && (
                 <div className="mt-16 animate-in slide-in-from-top-4 duration-700">
-                  <div className="flex items-center gap-4 mb-6"><span className="text-[10px] text-indigo-400 font-black uppercase tracking-[0.4em]">Generated Synthesis</span><div className="h-[1px] flex-grow bg-slate-800"></div></div>
+                  <div className="flex items-center gap-4 mb-6">
+                    <span className="text-[10px] text-indigo-400 font-black uppercase tracking-[0.4em]">Generated Synthesis</span>
+                    <div className="h-[1px] flex-grow bg-slate-800"></div>
+                  </div>
                   <div className="bg-indigo-500/5 border border-indigo-500/20 p-8 rounded-[2rem] text-xl text-indigo-100 italic font-serif">"{summary}"</div>
                 </div>
               )}
@@ -219,7 +244,7 @@ function App() {
                 </div>
                 <div className="border-l border-slate-800 pl-8">
                   <label className="text-[9px] font-black text-slate-600 uppercase tracking-[0.5em] block mb-8">Raw Data Transcript</label>
-                  <p className="text-slate-400 text-lg leading-loose whitespace-pre-wrap font-light italic">{selectedNote?.content || "No transcript."}</p>
+                  <p className="text-slate-400 text-lg leading-loose whitespace-pre-wrap font-light italic">{selectedNote?.content || "No transcript content archived."}</p>
                 </div>
               </div>
             </div>
