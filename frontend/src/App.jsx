@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@supabase/supabase-js'
+import * as pdfjs from 'pdfjs-dist'
+
+// Configure PDF worker
+pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 const supabase = createClient(
@@ -33,6 +37,27 @@ function App() {
     }
   };
 
+  // Helper: Extract text from PDFs or Text files
+  const extractTextFromFile = async (file) => {
+    if (file.type === 'text/plain') {
+      return await file.text();
+    }
+    
+    if (file.type === 'application/pdf') {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+      let fullText = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        fullText += textContent.items.map(s => s.str).join(' ');
+      }
+      return `\n--- Content from ${file.name} ---\n${fullText}\n`;
+    }
+
+    return `\n[File attached: ${file.name} (Content not readable by browser)]\n`;
+  };
+
   const handleFileSelect = (e) => {
     const files = e.target.files ? Array.from(e.target.files) : [];
     setAttachments(prev => [...prev, ...files]);
@@ -49,37 +74,39 @@ function App() {
     
     try {
       const uploadedPaths = [];
+      let allFilesContent = '';
 
-      // 1. Upload files to Supabase Storage Bucket ('archives')
+      // 1. Process files: Read content AND upload to storage
       for (const file of attachments) {
+        // Extract text for the AI
+        const text = await extractTextFromFile(file);
+        allFilesContent += text;
+
+        // Upload to Supabase Storage
         const fileExt = file.name.split('.').pop();
         const fileName = `${Math.random()}.${fileExt}`;
         const filePath = `${Date.now()}-${fileName}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('archives')
-          .upload(filePath, file);
-
+        const { error: uploadError } = await supabase.storage.from('archives').upload(filePath, file);
         if (uploadError) throw uploadError;
         uploadedPaths.push(filePath);
       }
 
-      // 2. Insert record into Database
+      // 2. Insert into Database
       const { data, error: insertError } = await supabase
         .from('notes')
-        .insert([{ 
-          content, 
-          attachments: uploadedPaths // Saving the actual storage paths
-        }])
+        .insert([{ content, attachments: uploadedPaths }])
         .select();
 
       if (insertError) throw insertError;
       
-      // 3. Trigger AI Synthesis
+      // 3. Trigger AI Synthesis with RAW content of files
       const response = await fetch(`${API_BASE}/api/summarize`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, noteId: data[0].id }),
+        body: JSON.stringify({ 
+          content: `${content}\n\n${allFilesContent}`, 
+          noteId: data[0].id 
+        }),
       });
 
       if (!response.ok) throw new Error("Synthesis failed");
@@ -87,7 +114,6 @@ function App() {
       const aiData = await response.json();
       setSummary(aiData.summary);
       
-      // Reset State
       setContent(''); 
       setAttachments([]);
       fetchHistory();
@@ -165,11 +191,10 @@ function App() {
         <div className="max-w-3xl mx-auto px-6 py-12 sm:py-24">
           
           {!selectedNote ? (
-            /* INPUT MODE */
             <div className="space-y-10">
               <div className="mb-12">
                 <h2 className="text-3xl font-bold text-white mb-2 tracking-tight">Intelligence Ingestion</h2>
-                <p className="text-slate-500 text-sm max-w-md">Input raw data or attach source files for archival synthesis.</p>
+                <p className="text-slate-500 text-sm max-w-md">The AI will now analyze both your text AND the content inside your attachments.</p>
               </div>
 
               <div className="bg-slate-900/40 border border-slate-800/60 rounded-[2rem] p-8 shadow-2xl relative">
@@ -197,7 +222,7 @@ function App() {
                 
                 <div className="mt-4 flex justify-between items-center border-t border-slate-800/50 pt-8">
                    <div className="flex gap-4">
-                      <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" multiple />
+                      <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" multiple accept=".pdf,.txt" />
                       <button onClick={() => fileInputRef.current?.click()} className="p-3 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-xl transition-all">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
@@ -205,7 +230,7 @@ function App() {
                       </button>
                    </div>
                   <button onClick={handleSaveAndSummarize} disabled={loading || (!content && attachments.length === 0)} className="px-8 py-4 bg-white text-slate-950 rounded-xl font-black transition-all hover:bg-indigo-50 disabled:opacity-5 text-[10px] tracking-[0.2em]">
-                    {loading ? 'PROCESSING...' : 'ARCHIVE & SUMMARIZE'}
+                    {loading ? 'READING FILES & SUMMARIZING...' : 'ARCHIVE & SUMMARIZE'}
                   </button>
                 </div>
               </div>
@@ -213,7 +238,7 @@ function App() {
               {summary && (
                 <div className="mt-16 animate-in slide-in-from-top-4 duration-700">
                   <div className="flex items-center gap-4 mb-6">
-                    <span className="text-[10px] text-indigo-400 font-black uppercase tracking-[0.4em]">Generated Synthesis</span>
+                    <span className="text-[10px] text-indigo-400 font-black uppercase tracking-[0.4em]">Deep Synthesis Result</span>
                     <div className="h-[1px] flex-grow bg-slate-800"></div>
                   </div>
                   <div className="bg-indigo-500/5 border border-indigo-500/20 p-8 rounded-[2rem] text-xl text-indigo-100 italic font-serif">"{summary}"</div>
@@ -221,7 +246,6 @@ function App() {
               )}
             </div>
           ) : (
-            /* VIEW MODE */
             <div className="space-y-12 animate-in fade-in duration-400">
                <header className="space-y-4">
                 <span className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.4em]">Archived Intelligence</span>
@@ -255,4 +279,4 @@ function App() {
   )
 }
 
-export default App
+export default App;
